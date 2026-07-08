@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Register - Simple Secure Share</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="wrap" style="max-width:400px;">
+  <div class="card">
+    <h1>🔒 Create your account</h1>
+    <div id="alert"></div>
+    <form id="registerForm">
+      <label>Full name</label>
+      <input id="name" required />
+      <label>Email</label>
+      <input id="email" type="email" required />
+      <label>Password (min 8 characters)</label>
+      <input id="password" type="password" required minlength="8" />
+      <button type="submit" style="width:100%;">Sign up</button>
+    </form>
+    <p class="muted" style="text-align:center; margin-top:16px;">
+      Already have an account? <a href="login.html">Log in</a>
+    </p>
+  </div>
+</div>
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById('alert');
+  alertBox.innerHTML = '';
+
+  const body = {
+    name: document.getElementById('name').value,
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value,
+  };
+
+  const res = await fetch('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    alertBox.innerHTML = '<div class="alert alert-success">Account created! Redirecting to login...</div>';
+    setTimeout(() => (window.location.href = 'login.html'), 1000);
+  } else {
+    alertBox.innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+  }
+});
+</script>
+</body>
+</html>

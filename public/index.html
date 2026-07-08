@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>My Files - Simple Secure Share</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div><strong>🔒 Simple Secure Share</strong></div>
+    <div>
+      <span class="muted" id="userEmail"></span>
+      <button class="secondary" id="logoutBtn">Log out</button>
+    </div>
+  </nav>
+
+  <div id="alert"></div>
+
+  <div class="dropzone" id="dropzone">
+    <p><strong>Drag & drop a file here, or click to browse</strong></p>
+    <p class="muted">Files are encrypted at rest (AES-256-GCM) before they touch the disk.</p>
+    <input type="file" id="fileInput" hidden />
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr>
+      </thead>
+      <tbody id="fileTableBody"></tbody>
+    </table>
+    <p class="muted" id="emptyState" style="display:none;">No files yet. Upload one above.</p>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div id="shareModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.45); align-items:center; justify-content:center;">
+  <div class="card" style="width:380px;">
+    <h1 id="shareModalTitle">Share file</h1>
+    <div id="shareAlert"></div>
+    <label>Optional password</label>
+    <input id="sharePassword" type="password" placeholder="Leave blank for no password" />
+    <label>Expires in (hours)</label>
+    <input id="shareExpiry" type="number" value="72" min="1" max="720" />
+    <button id="createShareBtn" style="width:100%;">Create share link</button>
+    <div id="shareResult" style="margin-top:14px;"></div>
+    <button class="secondary" id="closeShareModal" style="width:100%; margin-top:10px;">Close</button>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('token');
+if (!token) window.location.href = 'login.html';
+
+document.getElementById('userEmail').textContent = localStorage.getItem('userEmail') || '';
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('userEmail');
+  window.location.href = 'login.html';
+});
+
+function authHeaders(extra = {}) {
+  return { Authorization: `Bearer ${token}`, ...extra };
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleString();
+}
+
+async function loadFiles() {
+  const res = await fetch('/api/files', { headers: authHeaders() });
+  if (res.status === 401) { window.location.href = 'login.html'; return; }
+  const data = await res.json();
+  const tbody = document.getElementById('fileTableBody');
+  const empty = document.getElementById('emptyState');
+  tbody.innerHTML = '';
+
+  if (!data.data.files.length) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  data.data.files.forEach((file) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${file.originalName}</td>
+      <td>${formatBytes(file.size)}</td>
+      <td>${formatDate(file.createdAt)}</td>
+      <td>
+        <button class="secondary" onclick="downloadFile('${file.id}', '${file.originalName.replace(/'/g, "\\'")}')">Download</button>
+        <button class="secondary" onclick="openShareModal('${file.id}', '${file.originalName.replace(/'/g, "\\'")}')">Share</button>
+        <button class="danger" onclick="deleteFile('${file.id}')">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function downloadFile(id, name) {
+  const res = await fetch(`/api/files/${id}/download`, { headers: authHeaders() });
+  if (!res.ok) { alert('Download failed'); return; }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function deleteFile(id) {
+  if (!confirm('Delete this file? This cannot be undone.')) return;
+  await fetch(`/api/files/${id}`, { method: 'DELETE', headers: authHeaders() });
+  loadFiles();
+}
+
+let currentShareFileId = null;
+
+function openShareModal(fileId, name) {
+  currentShareFileId = fileId;
+  document.getElementById('shareModalTitle').textContent = `Share "${name}"`;
+  document.getElementById('shareResult').innerHTML = '';
+  document.getElementById('shareAlert').innerHTML = '';
+  document.getElementById('sharePassword').value = '';
+  document.getElementById('shareModal').style.display = 'flex';
+}
+
+document.getElementById('closeShareModal').addEventListener('click', () => {
+  document.getElementById('shareModal').style.display = 'none';
+});
+
+document.getElementById('createShareBtn').addEventListener('click', async () => {
+  const password = document.getElementById('sharePassword').value;
+  const expiresInHours = document.getElementById('shareExpiry').value;
+
+  const res = await fetch('/api/share', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ fileId: currentShareFileId, password, expiresInHours }),
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    document.getElementById('shareResult').innerHTML =
+      `<div class="alert alert-success">Link created:<br><a href="${data.data.shareUrl}" target="_blank">${data.data.shareUrl}</a></div>`;
+  } else {
+    document.getElementById('shareAlert').innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+  }
+});
+
+// Upload handling
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragging'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragging');
+  if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) uploadFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+async function uploadFile(file) {
+  const alertBox = document.getElementById('alert');
+  alertBox.innerHTML = '';
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch('/api/files/upload', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    loadFiles();
+  } else {
+    alertBox.innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+  }
+}
+
+loadFiles();
+</script>
+</body>
+</html>

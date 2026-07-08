@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Login - Simple Secure Share</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="wrap" style="max-width:400px;">
+  <div class="card">
+    <h1>🔒 Welcome back</h1>
+    <div id="alert"></div>
+    <form id="loginForm">
+      <label>Email</label>
+      <input id="email" type="email" required />
+      <label>Password</label>
+      <input id="password" type="password" required />
+      <button type="submit" style="width:100%;">Log in</button>
+    </form>
+    <p class="muted" style="text-align:center; margin-top:16px;">
+      Don't have an account? <a href="register.html">Sign up</a>
+    </p>
+  </div>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById('alert');
+  alertBox.innerHTML = '';
+
+  const body = {
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value,
+  };
+
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    localStorage.setItem('token', data.data.token);
+    localStorage.setItem('userEmail', data.data.user.email);
+    window.location.href = 'index.html';
+  } else {
+    alertBox.innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Shared File - Simple Secure Share</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="wrap" style="max-width:420px;">
+  <div class="card">
+    <h1>🔒 Shared File</h1>
+    <div id="alert"></div>
+    <div id="fileInfo" style="display:none;">
+      <p><strong id="fileName"></strong></p>
+      <p class="muted" id="fileSize"></p>
+      <div id="passwordField" style="display:none;">
+        <label>This file is password protected</label>
+        <input id="password" type="password" placeholder="Enter password" />
+      </div>
+      <button id="downloadBtn" style="width:100%;">Download file</button>
+    </div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(window.location.search);
+const token = params.get('token');
+const alertBox = document.getElementById('alert');
+
+if (!token) {
+  alertBox.innerHTML = '<div class="alert alert-error">No share token provided.</div>';
+} else {
+  loadInfo();
+}
+
+async function loadInfo() {
+  const res = await fetch(`/api/share/${token}`);
+  const data = await res.json();
+
+  if (!data.success) {
+    alertBox.innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+    return;
+  }
+
+  document.getElementById('fileInfo').style.display = 'block';
+  document.getElementById('fileName').textContent = data.data.fileName;
+  document.getElementById('fileSize').textContent = formatBytes(data.data.size);
+  if (data.data.requiresPassword) {
+    document.getElementById('passwordField').style.display = 'block';
+  }
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  alertBox.innerHTML = '';
+  const password = document.getElementById('password').value;
+
+  const res = await fetch(`/api/share/${token}/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json();
+    alertBox.innerHTML = `<div class="alert alert-error">${data.message}</div>`;
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = document.getElementById('fileName').textContent;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
