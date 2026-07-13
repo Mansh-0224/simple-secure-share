@@ -195,8 +195,8 @@ Computer Science Engineering Student
 
 Cybersecurity | Cloud Computing | Full Stack Development
 
-GitHub: https://github.com/YOUR_USERNAME
-LinkedIn: [YOUR_LINKEDIN](https://www.linkedin.com/in/manvi-sharma-986b6927a/)
+GitHub: https://github.com/Mansh-0224
+LinkedIn: https://www.linkedin.com/in/manvi-sharma-986b6927a/
 
 ---
 
